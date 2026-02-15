@@ -1,0 +1,13 @@
+.git/
+.gitignore
+.dockerignore
+venv/
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+
+outputs/
+violations_frames/
+postgres_data/
+

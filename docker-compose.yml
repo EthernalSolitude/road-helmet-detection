@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: helmet_app
+    
+    # Чтобы включить GPU, раскомментируй строки ниже 
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./videos:/app/videos
+      - ./outputs:/app/outputs
+      - ./violations_frames:/app/violations_frames
+    environment:
+      - DATABASE_URL=postgresql+psycopg://helmet_user:1234@db:5432/helmet_db
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+    container_name: helmet_db
+    environment:
+      POSTGRES_USER: helmet_user
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: helmet_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
