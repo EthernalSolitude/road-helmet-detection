@@ -177,7 +177,7 @@ helmet_detection_service/
 
 ![Swagger UI Interface](assets/swagger_screenshot.png)
 
-#### 1. `POST /process_video/`
+#### 1. `POST /analyze_video/`
 Загружает видео и запускает анализ.
 
 #### 2. `GET /violations/`
