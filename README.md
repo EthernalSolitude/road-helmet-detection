@@ -97,7 +97,7 @@
 1. **Клонируйте репозиторий:**
    ```bash
    git clone https://github.com/EthernalSolitude/road-helmet-detection.git
-   cd road_helmet_detecion
+   cd road-helmet-detecion
    ```
 
 2. **Запустите контейнеры:**
@@ -106,7 +106,7 @@
    ```
 
 3. **Проверьте статус:**
-   Откройте **Docker Desktop** → вкладка **Containers**. Должны работать:
+   Откройте **Docker Desktop** и перейдите во вкладку **Containers**. Должны работать:
    - `helmet_app` (FastAPI сервис)
    - `helmet_db` (PostgreSQL база данных)
 
@@ -120,7 +120,7 @@
 helmet_detection_service/
 ├── app.py                  # Основной файл FastAPI приложения
 ├── models.py               # Модели SQLAlchemy (таблица violations)
-├── best.pt                 # Обученная модель YOLOv8 (люди + шлемы)
+├── best.pt                 # Обученная модель YOLOv8s
 ├── Dockerfile              # Инструкция сборки образа
 ├── docker-compose.yml      # Оркестрация контейнеров
 ├── requirements.txt        # Python зависимости
@@ -239,12 +239,15 @@ helmet_detection_service/
 - [ ] **Hard Negative Mining:** 
 
 Дообучить модель на сложных примерах (капюшоны, шапки), чтобы снизить ложные срабатывания.
+
 - [ ] **Оптимизация:**
 
  Экспорт модели в TensorRT/ONNX для ускорения инференса.
+ 
 - [ ] **Веб-интерфейс:** 
 
 Разработать дашборд на React/Vue вместо Swagger UI.
+
 - [ ] **Real-time обработка:** 
 
 Поддержка RTSP-потоков через многопоточность (Celery/Redis).
