@@ -24,4 +24,4 @@ SessionLocal = sessionmaker(bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    print("✓ Таблица violations готова!")
+    print(" Таблица violations готова!")
