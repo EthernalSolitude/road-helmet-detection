@@ -118,6 +118,7 @@
 
 ```
 helmet_detection_service/
+├── config.py               #Конфигурационый файл (параметры модели, пути) 
 ├── app.py                  # Основной файл FastAPI приложения
 ├── models.py               # Модели SQLAlchemy (таблица violations)
 ├── best.pt                 # Обученная модель YOLOv8s
