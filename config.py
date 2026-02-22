@@ -1,9 +1,13 @@
 from pathlib import Path
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
+
     base_dir: Path = Path(__file__).parent
+
+    database_url: str | None = None
 
     db_user: str = "helmet_user"
     db_password: str = "1234"
@@ -18,14 +22,16 @@ class Settings(BaseSettings):
     model_path: str = "best.pt"
     conf_threshold: float = 0.5
     img_size: int = 1280
-    min_track_total: int = 30
+    min_track_total: int = 15
     violator_ratio: float = 0.8
 
     app_host: str = "0.0.0.0"
     app_port: int = 8000
 
     @property
-    def database_url(self) -> str:
+    def sqlalchemy_url(self) -> str:
+        if self.database_url:
+            return self.database_url
         return (
             f"postgresql+psycopg://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"

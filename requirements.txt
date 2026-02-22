@@ -5,3 +5,5 @@ psycopg[binary]
 python-multipart
 opencv-python-headless
 ultralytics
+pydantic
+pydantic-settings

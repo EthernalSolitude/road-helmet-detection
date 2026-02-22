@@ -4,16 +4,6 @@ services:
   app:
     build: .
     container_name: helmet_app
-    
-    # Чтобы включить GPU, раскомментируй строки ниже 
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
     ports:
       - "8000:8000"
     volumes:
@@ -24,19 +14,34 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://helmet_user:1234@db:5432/helmet_db
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
+    # Чтобы включить GPU, раскомментируй строки ниже
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   db:
     image: postgres:16
     container_name: helmet_db
     environment:
       POSTGRES_USER: helmet_user
-      POSTGRES_PASSWORD: 1234
+      POSTGRES_PASSWORD: "1234"
       POSTGRES_DB: helmet_db
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helmet_user -d helmet_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:

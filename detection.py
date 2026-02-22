@@ -5,10 +5,8 @@ from ultralytics import YOLO
 from models import SessionLocal, Violation
 from config import settings
 
-
 model = YOLO(settings.model_path)
 print("Классы модели:", model.names)
-
 
 def analyze_video(video_path: str):
     session = SessionLocal()
@@ -19,9 +17,17 @@ def analyze_video(video_path: str):
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+    
+    #Обрабатываем только каждый 2 кадр для ускорения инференса (frame skipping)
+    frame_skip = 2  
+
+    # Уменьшаем FPS выходного видео пропорционально, чтобы оно не ускорялось при просмотре
+    out_fps = int(fps / frame_skip) if fps > 0 else 15
+
     out_path = os.path.join(settings.outputs_dir, f"out_{video_name}")
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
+    
+    out = cv2.VideoWriter(out_path, fourcc, out_fps, (w, h))
 
     tracks_stats = defaultdict(lambda: {"helmet": 0, "no_helmet": 0, "violator": False})
     violators = []
@@ -32,13 +38,25 @@ def analyze_video(video_path: str):
         if not ret:
             break
 
+        frame_count += 1
+
+        # Пропускаем кадр
+        if frame_count % frame_skip != 0:
+            continue
+
+
+        # В качестве трекера взят BotSort: при пропуске кадров быстрые обьекты дают низкий IoU
+        # BoT-SORT компенсирует это через ReID (визуальные признаки объекта)
+        # и CMC (компенсацию движения камеры), сохраняя стабильные track_id
         results = model.track(
             frame,
             conf=settings.conf_threshold,
             imgsz=settings.img_size,
             persist=True,
+            tracker="botsort.yaml",
             verbose=False,
         )
+
         annotated = results[0].plot()
         out.write(annotated)
 
@@ -56,11 +74,15 @@ def analyze_video(video_path: str):
                 nh_cnt = tracks_stats[track_id]["no_helmet"]
                 total = h_cnt + nh_cnt
 
+                # Фиксируем нарушителя только после накопления min_track_total наблюдений,
+                # чтобы отсечь ложные срабатывания на единичных кадрах
                 if (
                     total >= settings.min_track_total
                     and not tracks_stats[track_id]["violator"]
                 ):
                     ratio = nh_cnt / total
+
+                    # Если доля кадров без шлема превышает порог — фиксируем нарушение
                     if ratio > settings.violator_ratio:
                         tracks_stats[track_id]["violator"] = True
 
@@ -95,8 +117,6 @@ def analyze_video(video_path: str):
                         )
 
                         print(f"НАРУШИТЕЛЬ! Track {track_id}, ratio={ratio:.2%}")
-
-        frame_count += 1
 
     cap.release()
     out.release()

@@ -1,12 +1,12 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from datetime import datetime
-from config import settings
 
+from config import settings
 
 class Base(DeclarativeBase):
     pass
-
 
 class Violation(Base):
     __tablename__ = "violations"
@@ -15,17 +15,14 @@ class Violation(Base):
     video_name = Column(String, index=True)
     track_id = Column(Integer, index=True)
     frame_idx = Column(Integer)
-    bbox = Column(String)  # "x1,y1,x2,y2"
+    bbox = Column(String)
     ratio_no_helmet = Column(Float)
     image_path = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-
-engine = create_engine(settings.database_url)
+engine = create_engine(settings.sqlalchemy_url)
 SessionLocal = sessionmaker(bind=engine)
 
-
-def init_db():
+def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     print("Таблица violations готова!")
-
