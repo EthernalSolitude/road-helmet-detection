@@ -1,0 +1,142 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "title": "Helmet Detection Service",
+  "tags": ["helmet", "yolo"],
+  "timezone": "",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {"from": "now-30m", "to": "now"},
+  "templating": {"list": []},
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Активные задачи (обработка видео)",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(helmet_active_video_tasks)", "refId": "A"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "orange", "value": 3},
+            {"color": "red", "value": 5}
+          ]}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Нарушений за период",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(increase(helmet_violations_detected_total[$__range]))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Обработано видео (успех)",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(increase(helmet_videos_processed_total{status=\"success\"}[$__range]))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Обработано видео (ошибка)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum(increase(helmet_videos_processed_total{status=\"error\"}[$__range]))", "refId": "A"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "red", "value": 1}
+          ]}
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Latency инференса на кадр (p50 / p95 / p99)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum by (le) (rate(helmet_inference_seconds_bucket[1m])))", "refId": "A", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(helmet_inference_seconds_bucket[1m])))", "refId": "B", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, sum by (le) (rate(helmet_inference_seconds_bucket[1m])))", "refId": "C", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "FPS обработки (кадры/сек)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "hertz"}},
+      "targets": [
+        {"expr": "rate(helmet_frames_processed_total[1m])", "refId": "A", "legendFormat": "processed"},
+        {"expr": "rate(helmet_frames_skipped_total[1m])", "refId": "B", "legendFormat": "skipped"}
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Частота новых нарушений",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "rate(helmet_violations_detected_total[1m])", "refId": "A", "legendFormat": "violations/s"}
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Время обработки видео (p50/p95)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum by (le) (rate(helmet_video_processing_seconds_bucket[5m])))", "refId": "A", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(helmet_video_processing_seconds_bucket[5m])))", "refId": "B", "legendFormat": "p95"}
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "HTTP requests / сек",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"expr": "sum by (handler, status) (rate(http_requests_total[1m]))", "refId": "A", "legendFormat": "{{handler}} {{status}}"}
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "HTTP latency p95",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le, handler) (rate(http_request_duration_seconds_bucket[1m])))", "refId": "A", "legendFormat": "{{handler}}"}
+      ]
+    }
+  ]
+}

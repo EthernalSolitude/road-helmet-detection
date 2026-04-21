@@ -1,24 +1,30 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-import shutil
-import os
 import glob
-from detection import analyze_video
-from models import SessionLocal, Violation, init_db
-from sqlalchemy import text
+import os
+import shutil
 from contextlib import asynccontextmanager
+
+from celery.result import AsyncResult
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from celery_app import celery_app
 from config import settings
+from models import SessionLocal, init_db
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     init_db()
     yield
 
 
 app = FastAPI(title="Helmet Violation Service", lifespan=lifespan)
+
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 app.mount("/violations", StaticFiles(directory=settings.violations_dir), name="violations")
 
@@ -35,7 +41,7 @@ def get_db():
         db.close()
 
 
-@app.post("/analyze_video")
+@app.post("/analyze_video", status_code=202)
 async def analyze_endpoint(file: UploadFile = File(...)):
     if not file.filename.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
         raise HTTPException(400, "Только видео!")
@@ -44,14 +50,30 @@ async def analyze_endpoint(file: UploadFile = File(...)):
     with open(video_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    result = analyze_video(video_path)
+    task = celery_app.send_task("analyze_video", args=[video_path])
 
     return {
+        "task_id": task.id,
+        "status_url": f"/tasks/{task.id}",
         "video_name": file.filename,
-        "download_url": f"{settings.public_base_url}/download_video/out_{file.filename}",
-        "violations_count": len(result.get("violations", [])),
-        "violations": result.get("violations", []),
     }
+
+
+@app.get("/tasks/{task_id}")
+async def task_status(task_id: str):
+    res = AsyncResult(task_id, app=celery_app)
+    payload: dict = {"task_id": task_id, "state": res.state}
+
+    if res.state == "PENDING":
+        payload["detail"] = "Задача ещё не взята в работу"
+    elif res.state == "PROGRESS":
+        payload["progress"] = res.info or {}
+    elif res.state == "SUCCESS":
+        payload["result"] = res.result
+    elif res.state == "FAILURE":
+        payload["error"] = str(res.info)
+
+    return payload
 
 
 @app.get("/violations")
@@ -89,8 +111,7 @@ async def clear_history(db: Session = Depends(get_db)):
     ]
 
     for folder_pattern in folders_to_clean:
-        files = glob.glob(folder_pattern)
-        for f in files:
+        for f in glob.glob(folder_pattern):
             try:
                 os.remove(f)
                 deleted_count += 1

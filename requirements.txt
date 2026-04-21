@@ -7,3 +7,7 @@ opencv-python-headless
 ultralytics
 pydantic
 pydantic-settings
+celery[redis]
+redis
+prometheus-client
+prometheus-fastapi-instrumentator
