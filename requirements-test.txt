@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-multipart
+opencv-python-headless
+pydantic
+pydantic-settings
+celery[redis]
+redis
+prometheus-client
+prometheus-fastapi-instrumentator
+pytest
+httpx
