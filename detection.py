@@ -16,6 +16,7 @@ from metrics import (
     violations_detected_total,
 )
 from models import SessionLocal, Violation
+from violations import classify_label, no_helmet_ratio, should_flag_violator
 
 _model = None
 
@@ -96,24 +97,23 @@ def analyze_video(video_path: str, progress_cb: ProgressFn = None):
 
             for box in results[0].boxes:
                 track_id = int(box.id)
-                cls_name = model.names[int(box.cls)].lower()
-
-                if "helmet" in cls_name and "no" not in cls_name:
-                    tracks_stats[track_id]["helmet"] += 1
-                elif "no" in cls_name or "without" in cls_name:
-                    tracks_stats[track_id]["no_helmet"] += 1
+                label = classify_label(model.names[int(box.cls)])
+                if label in ("helmet", "no_helmet"):
+                    tracks_stats[track_id][label] += 1
 
                 stats = tracks_stats[track_id]
-                total = stats["helmet"] + stats["no_helmet"]
-
-                if total < settings.min_track_total or stats["violator"]:
+                if stats["violator"]:
                     continue
-
-                ratio = stats["no_helmet"] / total
-                if ratio <= settings.violator_ratio:
+                if not should_flag_violator(
+                    stats["helmet"],
+                    stats["no_helmet"],
+                    min_observations=settings.min_track_total,
+                    threshold=settings.violator_ratio,
+                ):
                     continue
 
                 stats["violator"] = True
+                ratio = no_helmet_ratio(stats["helmet"], stats["no_helmet"])
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 crop = frame[max(0, y1) : max(0, y2), max(0, x1) : max(0, x2)]
