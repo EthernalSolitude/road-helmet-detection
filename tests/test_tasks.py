@@ -1,4 +1,5 @@
 """Тесты Celery-задачи analyze_video_task в eager-режиме без брокера и YOLO."""
+
 import pytest
 
 from celery_app import celery_app

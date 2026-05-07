@@ -3,6 +3,7 @@
 Здесь нет I/O, модели YOLO и БД — только правила, поэтому модуль полностью
 покрывается unit-тестами без внешних зависимостей.
 """
+
 from typing import Literal
 
 DetectionLabel = Literal["helmet", "no_helmet", "unknown"]

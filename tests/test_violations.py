@@ -1,4 +1,5 @@
 """Тесты чистой бизнес-логики определения нарушителя."""
+
 import pytest
 
 from violations import classify_label, no_helmet_ratio, should_flag_violator

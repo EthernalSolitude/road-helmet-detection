@@ -1,5 +1,4 @@
-from prometheus_client import Counter, Histogram, Gauge
-
+from prometheus_client import Counter, Gauge, Histogram
 
 video_processing_seconds = Histogram(
     "helmet_video_processing_seconds",

@@ -1,4 +1,5 @@
 """Глобальный conftest: переопределяем БД и Redis ДО импорта модулей приложения."""
+
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")

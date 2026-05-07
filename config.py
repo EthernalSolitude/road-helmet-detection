@@ -1,9 +1,10 @@
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(extra="ignore", protected_namespaces=())
 
     base_dir: Path = Path(__file__).parent
 
@@ -32,6 +33,14 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str | None = None
     celery_result_backend: str | None = None
+
+    # Если задан — write/delete ручки требуют header X-API-Key.
+    # Пустой/None → auth выключен (dev-режим).
+    api_key: str | None = None
+
+    # Rate limit для дорогих ручек (POST /analyze_video, DELETE /clear_history)
+    rate_limit_analyze: str = "10/minute"
+    rate_limit_clear: str = "5/minute"
 
     @property
     def sqlalchemy_url(self) -> str:

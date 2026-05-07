@@ -1,4 +1,5 @@
 """Тесты ORM-модели Violation на in-memory SQLite."""
+
 from models import Violation
 
 

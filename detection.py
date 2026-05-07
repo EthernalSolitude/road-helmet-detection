@@ -1,7 +1,8 @@
 import os
 import time
 from collections import defaultdict
-from typing import Callable, Optional
+from collections.abc import Callable
+from pathlib import Path
 
 import cv2
 
@@ -22,17 +23,31 @@ _model = None
 
 
 def get_model():
-    """Ленивая загрузка YOLO — один раз на процесс (после fork воркера)."""
+    """Ленивая загрузка YOLO — один раз на процесс (после fork воркера).
+
+    Если в конфиге указан .onnx, но файл ещё не существует — экспортируем
+    его из исходного .pt автоматически при первом запуске. Это даёт нам
+    единственный источник правды (best.pt в репо) и быстрый ONNX-инференс
+    без ручных шагов.
+    """
     global _model
     if _model is None:
         from ultralytics import YOLO
 
-        _model = YOLO(settings.model_path)
-        print("Модель загружена, классы:", _model.names)
+        path = Path(settings.model_path)
+        if path.suffix == ".onnx" and not path.exists():
+            pt_path = path.with_suffix(".pt")
+            if not pt_path.exists():
+                raise FileNotFoundError(f"Не найден ни {path}, ни исходный {pt_path} для экспорта")
+            print(f"ONNX-модель не найдена, экспортирую из {pt_path}...")
+            YOLO(str(pt_path)).export(format="onnx", imgsz=settings.img_size)
+
+        _model = YOLO(str(path))
+        print(f"Модель загружена ({path.suffix}), классы: {_model.names}")
     return _model
 
 
-ProgressFn = Optional[Callable[[int, int], None]]
+ProgressFn = Callable[[int, int], None] | None
 
 
 def analyze_video(video_path: str, progress_cb: ProgressFn = None):

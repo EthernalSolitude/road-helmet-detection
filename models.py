@@ -21,9 +21,7 @@ class Violation(Base):
     bbox = Column(String)
     ratio_no_helmet = Column(Float)
     image_path = Column(String)
-    created_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 def _make_engine(url: str):
