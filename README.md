@@ -1,5 +1,10 @@
 # Road Safety Helmet Detection System
 
+[![CI](https://github.com/EthernalSolitude/road-helmet-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/EthernalSolitude/road-helmet-detection/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/EthernalSolitude/road-helmet-detection/branch/main/graph/badge.svg)](https://codecov.io/gh/EthernalSolitude/road-helmet-detection)
+[![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 Система автоматического обнаружения нарушений использования защитных шлемов участниками дорожного движения (мотоциклисты, велосипедисты). Построена на базе YOLOv8s, FastAPI и PostgreSQL с полной контейнеризацией через Docker. Обработка видео вынесена в асинхронные воркеры Celery (брокер Redis), а наблюдаемость обеспечивается связкой Prometheus + Grafana. Модель обучена на данных с соревнования AI City Track.
 
 ### Основные возможности
@@ -13,6 +18,45 @@
 - **Асинхронная обработка** через Celery + Redis: API отвечает мгновенно, воркер обрабатывает видео в фоне, клиент поллит статус и прогресс
 - **Мониторинг** через Prometheus + Grafana: готовый дашборд с метриками латентности инференса, FPS, частоты нарушений, времени обработки и HTTP-трафика
 - Полная контейнеризация 
+
+---
+
+## Архитектура
+
+```mermaid
+flowchart LR
+    Client["Клиент<br/>Swagger / curl"]
+
+    subgraph Backend["Backend (Docker Compose)"]
+        API["FastAPI<br/>helmet_app:8000"]
+        Worker["Celery worker<br/>YOLOv8 + BoT-SORT<br/>helmet_worker"]
+        Redis[("Redis<br/>broker + results")]
+        Postgres[("PostgreSQL<br/>violations table")]
+    end
+
+    subgraph Observability["Observability"]
+        Prom["Prometheus<br/>:9090"]
+        Grafana["Grafana<br/>:3000"]
+    end
+
+    Client -->|"POST /analyze_video<br/>GET /tasks/{id}<br/>GET /violations<br/>GET /health"| API
+
+    API -->|"enqueue"| Redis
+    Redis -->|"brpop"| Worker
+    Worker -->|"progress"| Redis
+    Worker -->|"INSERT (batched)"| Postgres
+    API -->|"read"| Postgres
+
+    Prom -.->|"scrape /metrics"| API
+    Prom -.->|"scrape :9100"| Worker
+    Grafana -.-> Prom
+```
+
+**Поток данных:**
+1. Клиент шлёт видео в `POST /analyze_video` → API сохраняет файл, кладёт задачу в Redis, возвращает `task_id` за миллисекунды
+2. Celery-воркер забирает задачу из Redis, прогоняет YOLOv8 + BoT-SORT-трекинг, батчем коммитит нарушения в Postgres
+3. Каждые 30 кадров воркер пишет прогресс обратно в Redis – клиент опрашивает `/tasks/{id}` и видит `current/total`
+4. Prometheus каждые 10 сек скрейпит `/metrics` с обоих сервисов; Grafana визуализирует latency инференса, FPS, частоту нарушений
 
 ---
 
@@ -118,12 +162,12 @@
 
 3. **Проверьте статус:**
    Откройте **Docker Desktop** и перейдите во вкладку **Containers**. Должны работать:
-   - `helmet_app` — FastAPI сервис
-   - `helmet_worker` — Celery-воркер, обрабатывающий видео
-   - `helmet_redis` — брокер очереди и result backend
-   - `helmet_db` — PostgreSQL база данных
-   - `helmet_prometheus` — сбор метрик
-   - `helmet_grafana` — визуализация метрик
+   - `helmet_app` – FastAPI сервис
+   - `helmet_worker` – Celery-воркер, обрабатывающий видео
+   - `helmet_redis` – брокер очереди и result backend
+   - `helmet_db` – PostgreSQL база данных
+   - `helmet_prometheus` – сбор метрик
+   - `helmet_grafana` – визуализация метрик
 
 4. **Откройте сервисы в браузере:**
    - API документация (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -223,10 +267,10 @@ helmet_detection_service/
 
 #### 2. `GET /tasks/{task_id}`
 Статус задачи. Возможные состояния:
-- `PENDING` — задача в очереди, воркер ещё не взял
-- `PROGRESS` — идёт обработка; поле `progress` содержит `{"current": <кадр>, "total": <всего кадров>}`
-- `SUCCESS` — готово; в `result` лежат `violations`, `download_url`, `violations_count`, `frames_processed`
-- `FAILURE` — упало; в `error` текст ошибки
+- `PENDING` – задача в очереди, воркер ещё не взял
+- `PROGRESS` – идёт обработка; поле `progress` содержит `{"current": <кадр>, "total": <всего кадров>}`
+- `SUCCESS` – готово; в `result` лежат `violations`, `download_url`, `violations_count`, `frames_processed`
+- `FAILURE` – упало; в `error` текст ошибки
 
 #### 3. `GET /violations`
 Получает список последних 50 нарушений из базы данных.
@@ -238,7 +282,7 @@ helmet_detection_service/
 Скачивание размеченного видео (имя формируется как `out_<original_name>`).
 
 #### 6. `GET /metrics`
-Метрики FastAPI в формате Prometheus (HTTP RPS, latency, размеры запросов/ответов + кастомные `helmet_*`). Основной источник данных для дашборда — аналогичный эндпоинт воркера на `:9100/metrics`.
+Метрики FastAPI в формате Prometheus (HTTP RPS, latency, размеры запросов/ответов + кастомные `helmet_*`). Основной источник данных для дашборда – аналогичный эндпоинт воркера на `:9100/metrics`.
 
 ---
 
@@ -267,7 +311,30 @@ Prometheus скрейпит два таргета: `app:8000` (HTTP-метрик
 - Время обработки видео p50 / p95
 - HTTP RPS и p95 latency по хендлерам
 
-Чтобы увидеть значения под нагрузкой — залей видео через `POST /analyze_video` и смотри, как оживают панели в Grafana по адресу [http://localhost:3000](http://localhost:3000).
+Чтобы увидеть значения под нагрузкой – залей видео через `POST /analyze_video` и смотри, как оживают панели в Grafana по адресу [http://localhost:3000](http://localhost:3000).
+
+---
+
+## Оптимизация инференса через ONNX Runtime
+
+В качестве рантайма инференса можно использовать ONNX Runtime вместо PyTorch – это даёт ускорение по latency на одном кадре без потери точности (модель та же, меняется только бэкенд).
+
+**Включение** через переменную окружения:
+
+```yaml
+# в docker-compose.yml – секция worker.environment
+- MODEL_PATH=best.onnx
+```
+
+При первом запуске воркера, если файла `best.onnx` ещё нет, он автоматически экспортируется из `best.pt` через `ultralytics.YOLO.export(format="onnx")`. Дальше используется как обычно – трекинг BoT-SORT тоже работает с ONNX-моделью.
+
+**Замер выигрыша** на одном кадре (50 прогонов после прогрева):
+
+```bash
+python scripts/benchmark_inference.py videos/your_video.mp4 --frames 50
+```
+
+Скрипт прогоняет одну и ту же модель в обоих форматах и печатает p50 / p95 / mean / fps + итоговое ускорение. Результат можно сравнить с панелью «Latency инференса на кадр» в Grafana, чтобы увидеть эффект на реальном пайплайне.
 
 ---
 

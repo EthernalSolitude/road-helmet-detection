@@ -10,4 +10,8 @@ redis
 prometheus-client
 prometheus-fastapi-instrumentator
 pytest
+pytest-cov
 httpx
+slowapi
+structlog
+alembic
