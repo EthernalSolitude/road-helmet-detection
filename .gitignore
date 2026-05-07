@@ -18,4 +18,15 @@ videos/*
 
 postgres_data/
 
+# ONNX-экспорты регенерируются из best.pt при первом запуске воркера
+*.onnx
+
+# Coverage artifacts
+.coverage
+htmlcov/
+coverage.xml
+
+# Локальные заметки и сгенерированные руководства
+docs/
+
 
