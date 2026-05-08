@@ -168,11 +168,13 @@ flowchart LR
    - `helmet_db` – PostgreSQL база данных
    - `helmet_prometheus` – сбор метрик
    - `helmet_grafana` – визуализация метрик
+   - `helmet_jaeger` – distributed tracing (OpenTelemetry)
 
 4. **Откройте сервисы в браузере:**
    - API документация (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
    - Grafana (логин/пароль `admin`/`admin`): [http://localhost:3000](http://localhost:3000) → Dashboards → **Helmet Detection Service**
    - Prometheus (таргеты и PromQL): [http://localhost:9090](http://localhost:9090)
+   - Jaeger UI (трейсы): [http://localhost:16686](http://localhost:16686)
 
 ---
 
@@ -189,7 +191,7 @@ helmet_detection_service/
 ├── metrics.py              # Prometheus-метрики (гистограммы, counters, gauge)
 ├── best.pt                 # Обученная модель YOLOv8s
 ├── Dockerfile              # Инструкция сборки образа
-├── docker-compose.yml      # Оркестрация контейнеров (app, worker, redis, db, prometheus, grafana)
+├── docker-compose.yml      # Оркестрация контейнеров (app, worker, redis, db, prometheus, grafana, jaeger)
 ├── requirements.txt        # Python зависимости
 ├── prometheus/
 │   └── prometheus.yml      # Скрейп-конфиг (таргеты app:8000 и worker:9100)
@@ -223,6 +225,8 @@ helmet_detection_service/
 | `db`         | 5433         | 5432            | PostgreSQL                          |
 | `prometheus` | 9090         | 9090            | Prometheus UI / PromQL              |
 | `grafana`    | 3000         | 3000            | Grafana (логин/пароль `admin`/`admin`) |
+| `jaeger`     | 16686        | 16686           | Jaeger UI (трейсы)                  |
+| `jaeger`     | 4318         | 4318            | OTLP/HTTP receiver для трейсов      |
 
 **Примечание:** Порт 5433 выбран, чтобы не конфликтовать с локально установленным PostgreSQL (порт 5432).
 
