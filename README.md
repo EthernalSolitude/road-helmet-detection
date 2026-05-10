@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/EthernalSolitude/road-helmet-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/EthernalSolitude/road-helmet-detection/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/EthernalSolitude/road-helmet-detection/branch/main/graph/badge.svg)](https://codecov.io/gh/EthernalSolitude/road-helmet-detection)
+[![GHCR](https://img.shields.io/badge/image-ghcr.io-blue?logo=docker)](https://github.com/EthernalSolitude/road-helmet-detection/pkgs/container/road-helmet-detection)
 [![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
@@ -159,6 +160,11 @@ flowchart LR
    ```bash
    docker-compose up -d --build
    ```
+
+   > Готовый образ публикуется автоматически в GHCR на каждый merge в `main`:
+   > ```bash
+   > docker pull ghcr.io/ethernalsolitude/road-helmet-detection:latest
+   > ```
 
 3. **Проверьте статус:**
    Откройте **Docker Desktop** и перейдите во вкладку **Containers**. Должны работать:
