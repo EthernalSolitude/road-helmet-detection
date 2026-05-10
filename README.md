@@ -188,26 +188,49 @@ flowchart LR
 
 ```
 helmet_detection_service/
-├── config.py               # Конфигурационый файл (параметры модели, пути, Redis/Celery)
-├── app.py                  # FastAPI: ручки /analyze_video, /tasks/{id}, /violations, /metrics
-├── models.py               # Модели SQLAlchemy (таблица violations)
-├── detection.py            # Логика детекции, трекинга и эмиссии метрик
-├── celery_app.py           # Конфигурация Celery, warmup модели после fork, /metrics воркера
-├── tasks.py                # Celery-задача analyze_video_task (прогресс + результат)
-├── metrics.py              # Prometheus-метрики (гистограммы, counters, gauge)
-├── best.pt                 # Обученная модель YOLOv8s
-├── Dockerfile              # Инструкция сборки образа
-├── docker-compose.yml      # Оркестрация контейнеров (app, worker, redis, db, prometheus, grafana, jaeger)
-├── requirements.txt        # Python зависимости
+├── app.py                       # FastAPI: ручки /analyze_video, /tasks/{id}, /violations, /health, /metrics
+├── config.py                    # Settings (pydantic-settings): пути, БД, Redis, Celery, лимиты, API key
+├── models.py                    # SQLAlchemy: таблица violations + StaticPool для in-memory sqlite в тестах
+├── detection.py                 # YOLO + BoT-SORT, эмиссия Prometheus-метрик, авто-экспорт ONNX
+├── violations.py                # Чистая бизнес-логика классификации (helmet/no_helmet/violator)
+├── celery_app.py                # Celery: брокер/backend, signal-handlers (warmup модели, request_id propagation)
+├── tasks.py                     # Celery-задача analyze_video_task (прогресс + результат)
+├── auth.py                      # API-key аутентификация (X-API-Key header)
+├── logging_setup.py             # structlog + сквозной request_id через ContextVar
+├── tracing.py                   # OpenTelemetry: авто-инструментация FastAPI/Celery/SQLAlchemy/Redis
+├── metrics.py                   # Prometheus-метрики (гистограммы, counters, gauge)
+├── best.pt                      # Обученная модель YOLOv8s
+├── Dockerfile                   # Сборка образа (Python 3.10-slim + torch CPU + все зависимости)
+├── docker-compose.yml           # Оркестрация: app, worker, redis, db, prometheus, grafana, jaeger
+├── requirements.txt             # Прод-зависимости
+├── requirements-test.txt        # Тестовые зависимости (без torch/ultralytics — для быстрого CI)
+├── pyproject.toml               # Конфиг ruff, coverage и pytest-маркеров
+├── .pre-commit-config.yaml      # Хуки pre-commit (ruff check + format + базовая гигиена)
+├── alembic.ini                  # Конфигурация Alembic
+├── alembic/
+│   ├── env.py                   # URL берётся из settings, общий конфиг для prod/dev/CI
+│   └── versions/                # Миграции схемы БД
 ├── prometheus/
-│   └── prometheus.yml      # Скрейп-конфиг (таргеты app:8000 и worker:9100)
+│   └── prometheus.yml           # Скрейп-конфиг (таргеты app:8000 и worker:9100)
 ├── grafana/
-│   └── provisioning/       # Автопровижн датасорса и дашборда
+│   └── provisioning/            # Авто-провижн датасорса и дашборда
 │       ├── datasources/
 │       └── dashboards/
-├── videos/                 # Папка для входных видео
-├── outputs/                # Папка для обработанных видео
-└── violations_frames/      # Папка для сохранённых кадров нарушений
+├── scripts/
+│   └── benchmark_inference.py   # Сравнение PyTorch / ONNX / ONNX-INT8 бэкендов
+├── tests/
+│   ├── conftest.py              # Шерингованные фикстуры (sqlite in-memory, db_session)
+│   ├── test_api.py              # FastAPI TestClient: ручки + auth + rate limit
+│   ├── test_models.py           # ORM Violation
+│   ├── test_violations.py       # Чистая бизнес-логика (параметризованные)
+│   ├── test_tasks.py            # Celery-задача в eager-режиме
+│   └── integration/             # Интеграционные тесты (запускаются в CI с реальными Postgres+Redis)
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # CI/CD: lint, tests, integration, security audit, docker publish в GHCR
+├── videos/                      # Папка для входных видео
+├── outputs/                     # Папка для обработанных видео
+└── violations_frames/           # Папка для сохранённых кадров нарушений
 ```
 
 ---
@@ -322,6 +345,46 @@ Prometheus скрейпит два таргета: `app:8000` (HTTP-метрик
 - HTTP RPS и p95 latency по хендлерам
 
 Чтобы увидеть значения под нагрузкой – залей видео через `POST /analyze_video` и смотри, как оживают панели в Grafana по адресу [http://localhost:3000](http://localhost:3000).
+
+---
+
+## CI/CD
+
+Pipeline на GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) запускается на каждый push и pull request. Старые билды отменяются при новом push'е (`concurrency.cancel-in-progress`), что экономит CI-минуты.
+
+### Jobs
+
+| Job | Когда | Что делает |
+|---|---|---|
+| `lint` | Любой push/PR | `ruff check` + `ruff format --check` |
+| `security` | Любой push/PR | `pip-audit` сканит зависимости на CVE (мягкий, не блокирует) |
+| `test` | Любой push/PR | pytest на матрице **Python 3.10 / 3.11 / 3.12**, coverage gate ≥ 70% (текущее ~84%), отчёт в Codecov |
+| `integration-test` | Любой push/PR | Поднимает реальные Postgres 16 + Redis 7 через GHA `services`, применяет `alembic upgrade head`, гоняет тесты с маркером `integration` |
+| `docker-build` | Не-main ветки | Smoke-сборка образа без публикации (защита от поломки `Dockerfile`) |
+| **`docker-publish`** | **Только push в `main`** | Сборка + публикация образа в **GHCR** с тегами `:latest` и `:<sha>` |
+
+### Continuous Delivery: GHCR
+
+После успешного merge в `main` готовый образ автоматически публикуется в GitHub Container Registry. Любой может его скачать:
+
+```bash
+docker pull ghcr.io/ethernalsolitude/road-helmet-detection:latest
+```
+
+Список версий и история — на странице [Packages](https://github.com/EthernalSolitude/road-helmet-detection/pkgs/container/road-helmet-detection) репозитория. По SHA коммита всегда можно откатиться к конкретной версии:
+
+```bash
+docker pull ghcr.io/ethernalsolitude/road-helmet-detection:c3c3c64...
+```
+
+### Локальные хуки
+
+Перед каждым коммитом ruff проверяет код через [`.pre-commit-config.yaml`](.pre-commit-config.yaml) — линтер+форматтер не дают пушить грязный код. Установка:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
 
 ---
 
