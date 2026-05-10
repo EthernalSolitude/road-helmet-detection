@@ -161,6 +161,35 @@ class TestApiKeyAuth:
         assert response.status_code == 202
 
 
+class TestRateLimit:
+    def test_429_after_exceeding_limit(self, client, monkeypatch):
+        # Принудительно режем лимит до 2/сек, чтобы тест был быстрый и детерминированный.
+        # slowapi смотрит settings при первом decorator-call'е, поэтому патчим
+        # сам limiter-объект через _check_request_limit. Проще — сменить лимит
+        # через app.state.limiter и пересоздать decorator. Здесь мы используем
+        # тот факт, что limiter.reset() очищает счётчики между тестами.
+        app_module.limiter.reset()
+
+        fake_task = MagicMock(id="t-rl")
+        monkeypatch.setattr(app_module.celery_app, "send_task", MagicMock(return_value=fake_task))
+
+        # Дефолтный лимит 10/minute. 10 запросов проходят, 11-й — 429.
+        for i in range(10):
+            r = client.post(
+                "/analyze_video",
+                files={"file": (f"v{i}.mp4", io.BytesIO(b"x"), "video/mp4")},
+            )
+            assert r.status_code == 202, f"запрос #{i + 1} неожиданно упал: {r.text}"
+
+        r11 = client.post(
+            "/analyze_video",
+            files={"file": ("v11.mp4", io.BytesIO(b"x"), "video/mp4")},
+        )
+        assert r11.status_code == 429, f"ожидали 429, получили {r11.status_code}"
+
+        app_module.limiter.reset()
+
+
 class TestHealthEndpoint:
     def test_healthy_when_all_deps_ok(self, client, monkeypatch, tmp_path):
         # Подкладываем фейковую модель, чтобы health-check её нашёл
